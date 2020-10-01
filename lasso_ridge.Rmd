@@ -1,0 +1,201 @@
+---
+title: "Predicting Labour Wages using Ridge and Lasso Regression"
+author: "POOJA BABU"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+
+# Ridge and Lasso Regression
+
+$$RSS(\beta) + \lambda \sum_{j=1}^{p} \beta_j^2$$
+
+$$RSS(\beta) + \lambda \sum_{j=1}^{p} |\beta_j|$$
+
+# Read and Understand the data
+
+```{r}
+
+setwd("C:/Users/lenovo/Desktop/sem 3/ML")
+getwd()
+
+labour_data = read.csv("labour_income.csv",header=TRUE)
+ summary(labour_data)
+```
+
+# Data Pre-processing
+
+## Train-Test Split
+
+* Split the data into train and test
+
+```{r}
+set.seed(007)
+train_rows <- sample(x=seq(1,nrow(labour_data),1),size = 0.7*nrow(labour_data))
+train_data <- labour_data[train_rows,]
+test_data <- labour_data[-train_rows,]
+
+
+```
+
+## Standardize the Data
+
+* Standardize the continuous independent variables
+
+```{r}
+##important to rescale data
+library(caret)
+std_obj <- preProcess(x=train_data[,!colnames(train_data)%in% c("wages")],method = c("center","scale"))
+train_std_data <- predict(std_obj,train_data)
+test_std_data <- predict(std_obj,test_data)
+```
+
+
+## Dummify the Data
+
+* Use the dummyVars() function from caret to convert sex and age into dummy variables
+
+```{r}
+##dummyVars() fxn from caret converts sex and age into dummy variables
+##dummyify can be done only on dataframe
+dummy_obj <- dummyVars(~ .,train_std_data)
+train_dummy_data <- as.data.frame( predict(dummy_obj,train_std_data))     
+test_dummy_data <- as.data.frame( predict(dummy_obj,test_std_data))  
+
+```
+
+
+## Get the data into a compatible format
+
+* The functions we will be using today from the glmnet package expect a matrix as an input and not our familiar formula structure, so we need to convert our dataframes into a matrix
+
+```{r}
+x_train <- as.matrix(train_dummy_data[,-1])
+y_train <- as.matrix(train_dummy_data[,1])
+x_test <- as.matrix(test_dummy_data[,-1])
+y_test <- as.matrix(test_dummy_data[,1])
+
+```
+
+# Hyper-parameter Tuning
+
+* Choose an optimal lambda value for the ridge and lasso regression models by using cross validation
+```{r}
+library(glmnet)
+
+cv_lass0 <-  cv.glmnet(x_train,y_train,alpha= 1,type.measure = "mse",nfolds = 4)
+
+```
+
+## Choosing a lambda for Lasso Regression
+
+* The alpha value is 1 for lasso regression
+
+```{r}
+##lasso used for crossvalidation
+#helps understanding standard deviation,degree of freedom and lambda value+
+plot(cv_lass0)
+
+plot(cv_lass0$glmnet.fit,xvar = "lambda",label = TRUE)
+
+print(cv_lass0$lambda.min)
+
+
+```
+
+* The object returned form the call to cv.glmnet() function, contains the lambda values of importance
+
+* The coefficients are accessible calling the coef() function on the cv_lasso object
+
+```{r}
+coef(cv_lass0)
+
+```
+
+## Choosing a lambda for Ridge Regression
+
+* The alpha value is 0 for ridge regression
+
+```{r}
+cv_ridge <- cv.glmnet(x_train,y_train,alpha=0,type.measure = "mse",nfolds = 4)
+plot(cv_ridge)
+plot(cv_ridge$glmnet.fit,xvar = "lambda",label = T)
+print(cv_ridge$lambda.min)
+
+```
+
+
+* We can access the lambda and the coefficients as we did before
+
+```{r}
+coef(cv_ridge)
+```
+
+# Building The Final Model
+
+* By using the optimal lambda values obtained above, we can build our ridge and lasso models
+
+## Building the Final Lasso Regression Model
+
+```{r}
+lasso_model <-  glmnet(x_train,y_train,lambda = cv_lass0$lambda.min,alpha = 1)
+coef(lasso_model)
+
+```
+
+* Use the model to predict on test data
+
+```{r}
+preds_lasso <- predict(lasso_model,x_test)
+```
+
+## Building the Final Ridge Regression Model
+
+```{r}
+ridge_model <- glmnet(x_train,y_train,lambda = cv_ridge$lambda.min,alpha=0)
+coef(ridge_model)
+```
+
+* Use the model to predict on test data
+
+```{r}
+preds_ridge <- predict(ridge_model,x_test)
+
+```
+
+
+# Model Performance Evaluation
+
+## Lasso Regression Model Metrics
+
+```{r}
+
+library(DMwR)
+regr.eval(trues = y_test,preds = preds_lasso)
+```
+
+## Ridge Regression Model Metrics
+
+```{r}
+regr.eval(trues = y_test,preds = preds_ridge)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
